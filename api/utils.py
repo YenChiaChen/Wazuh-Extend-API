@@ -259,6 +259,64 @@ def checkComnineStatusSimple(agentID):
             'Error Message' : str(e)
         }), 500
     
+def deviceRiskLabeling(agentID):
+    try:
+        OSData = deviceAnalysis.getAgentVersion(agentID)
+        activeSupport = 0
+        securitySupport = 0
+        supportPoint = deviceAnalysis.isAgentOSVersionStillSupport(agentID)
+
+        if supportPoint == 2:
+            activeSupport = 1
+            securitySupport = 1
+        elif supportPoint == 1:
+            securitySupport = 1
+
+        isNewestPatch = deviceAnalysis.isAgentPatchesNewest(agentID)
+        fireWallStatus = deviceAnalysis.checkFireWallStatus(agentID)
+        realtimeStatus = deviceAnalysis.checkAntivirusRealtime(agentID)
+        malwareStatus = deviceAnalysis.checkAntivirusScanMalware(agentID)
+        virusStatus = deviceAnalysis.checkAntivirusScanViruses(agentID)
+        accountStatus = deviceAnalysis.checkAccountManagement(agentID)
+        accountStatus = deviceAnalysis.accountManagementSimplfy(accountStatus)
+
+        try:
+            df = pd.read_csv('weights.csv')
+            weights = df.iloc[0].to_dict()
+        except:
+            weights = {
+                'os': 1.0,
+                'firewall': 1.0,
+                'antivirus': 1.0,
+                'account': 1.0
+            }
+            df = pd.DataFrame(weights, index=[0])
+            df.to_csv('weights.csv', index=False) 
+
+        weight_os = weights['os']
+        weight_firewall = weights['firewall']
+        weight_antivirus = weights['antivirus']
+        weight_account = weights['account']
+
+        score_os = (activeSupport + securitySupport + isNewestPatch) / 3
+        score_firewall = (fireWallStatus[0] + fireWallStatus[1] + fireWallStatus[2]) / 3
+        score_antivirus = (realtimeStatus + malwareStatus + virusStatus) / 3
+        score_account = sum(accountStatus.values()) / (len(accountStatus) + 1)
+        score_weighted = score_os*weight_os + score_firewall*weight_firewall + score_antivirus*weight_antivirus + score_account*weight_account
+        score_weighted = score_weighted / (weight_os + weight_firewall + weight_antivirus + weight_account)
+        return jsonify({
+            "generator": "DeviceRisk",
+            "targetId": agentID,
+            "riskType": "HostRisk",
+            "value": score_weighted
+        })
+  
+    except Exception as e:
+        return jsonify({
+            'Agent ID' : agentID,
+            'Error Message' : str(e)
+        }), 500
+    
 
 def update_os_file():
     try:

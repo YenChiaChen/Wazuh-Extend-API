@@ -1,7 +1,10 @@
 import utils
+import config
+import requests
 import pandas as pd
 from flask import Flask, jsonify, request
 from flasgger import Swagger
+from apscheduler.schedulers.background import BackgroundScheduler
 
 swagger_config = {
     "headers": [],
@@ -232,6 +235,17 @@ def check_account_management(agentID):
               type: string
     """
     return utils.checkAccountManagement(agentID)
+
+@app.route("/api/hids/<agentID>/evaluation/auto", methods=['POST'])
+def label_agent():
+    data = utils.deviceRiskLabeling('003')
+    url = config.PDP_URL
+    headers = {'Content-type': 'application/json'}
+    response = requests.post(url, json=data.json, headers=headers)
+    if response.status_code == 200:
+        return jsonify({'status': 'success'})
+    else:
+        return jsonify({'status': 'error', 'message': response.text}), response.status_code
 
 @app.route('/api/hids/<agentID>/evaluation/detail' , methods=['GET'])
 def check_all_status(agentID):
@@ -560,6 +574,12 @@ def set_criteria():
     df.to_csv('weights.csv', index=False)
     return  jsonify({"msg":'Weight set and saved successfully'})
 
+def run_scheduler():
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(label_agent, 'interval', minutes=5)
+    scheduler.start()
+
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    run_scheduler()
+    app.run(host='0.0.0.0',port=5000)
